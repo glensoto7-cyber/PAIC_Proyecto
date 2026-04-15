@@ -2,17 +2,18 @@ import streamlit as st
 import pandas as pd
 import google.generativeai as genai
 
-# CONFIGURACIÓN DE PÁGINA
+# --- 1. CONFIGURACIÓN DE LA PÁGINA ---
 st.set_page_config(page_title="PAIC - Cartago", layout="wide")
 st.title("🌱 Plataforma Agro-Inteligente Cartago (PAIC)")
 st.markdown("Apoyo a la toma de decisiones para productores de Cartago.")
 
-# CARGA DE DATOS
+# --- 2. CARGA DE DATOS (CORREGIDO PARA EXCEL) ---
 @st.cache_data
 def cargar_datos():
-    # El archivo debe llamarse exactamente así y estar en la misma carpeta
-    nombre_archivo = "Precios historicos 15 ABRIL.xlsx - 2020-2026.csv"
-    df = pd.read_csv(nombre_archivo)
+    # El nombre debe ser idéntico al que subiste a GitHub
+    nombre_archivo = "Precios historicos 15 ABRIL.xlsx"
+    # Cargamos el Excel usando openpyxl
+    df = pd.read_excel(nombre_archivo, engine='openpyxl')
     df['Fecha'] = pd.to_datetime(df['Fecha'])
     return df
 
@@ -21,15 +22,16 @@ try:
     ultimo = df.iloc[-1]
     promedio = df.mean(numeric_only=True)
 except Exception as e:
-    st.error(f"⚠️ No se encontró el archivo CSV en la carpeta. Verifica el nombre.")
+    st.error(f"⚠️ Error al cargar el archivo de Excel: {e}")
+    st.info("Asegúrate de que el archivo se llame exactamente 'Precios historicos 15 ABRIL.xlsx' en tu GitHub.")
     st.stop()
 
-# PESTAÑAS
+# --- 3. CREACIÓN DE LAS PESTAÑAS ---
 tab1, tab2, tab3 = st.tabs(["📊 Semáforo de Precios", "🧮 Calculadora de Costos", "🤖 Asistente IA"])
 
 with tab1:
     st.header("Estado de Precios (CENADA)")
-    st.write("Interpretación de precios actuales frente al promedio histórico.")
+    st.write("Precios actuales comparados con el promedio histórico de Cartago.")
     c1, c2, c3 = st.columns(3)
     
     def semaforo(act, prom):
@@ -56,8 +58,9 @@ with tab2:
 
 with tab3:
     st.header("Asistente Agrícola con IA")
+    st.write("Usa tu API Key de Gemini para recibir consejos basados en los datos.")
     clave = st.text_input("1. Pega aquí tu API Key de Gemini:", type="password")
-    pregunta = st.text_area("2. Haz tu consulta (Ej: ¿Es buen momento para sembrar cebolla?)")
+    pregunta = st.text_area("2. Haz tu consulta (Ej: ¿Es buen momento para sembrar papa?)")
     
     if st.button("Consultar Asistente"):
         if clave and pregunta:
@@ -65,17 +68,17 @@ with tab3:
                 genai.configure(api_key=clave)
                 model = genai.GenerativeModel('gemini-1.5-flash')
                 
-                # Contexto para que la IA sepa de qué habla
                 contexto = f"""
-                Eres un experto agrícola en Cartago, Costa Rica. 
-                Datos actuales: Papa ₡{ultimo['Papa Blanca (quintal)']}, Cebolla ₡{ultimo['Cebolla Amarilla (Kg)']}, Fresa ₡{ultimo['Fresa (Kg)']}.
-                Pregunta del agricultor: {pregunta}
-                Responde de forma sencilla y motivadora.
+                Eres un experto agrícola de Cartago. 
+                Precios actuales: Papa ₡{ultimo['Papa Blanca (quintal)']}, Cebolla ₡{ultimo['Cebolla Amarilla (Kg)']}, Fresa ₡{ultimo['Fresa (Kg)']}.
+                Pregunta: {pregunta}
+                Responde de forma sencilla y motivadora para el agricultor.
                 """
                 
                 res = model.generate_content(contexto)
                 st.info(res.text)
             except Exception as e:
-                st.error(f"Error de conexión: {e}")
+                st.error(f"Error de conexión con Gemini: {e}")
         else:
             st.warning("Completa la clave y la pregunta.")
+      
