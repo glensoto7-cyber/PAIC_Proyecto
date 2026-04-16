@@ -20,18 +20,18 @@ st.markdown(f"""
     <style>
     .hero-banner {{
         background-image: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url('{fotos["banner"]}');
-        background-size: cover; background-position: center; height: 200px;
+        background-size: cover; background-position: center; height: 180px;
         display: flex; align-items: center; justify-content: center;
         border-radius: 15px; margin-bottom: 20px; color: white;
-        font-size: 2.5rem; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
+        font-size: 2.2rem; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
     }}
     .product-card {{
-        background-size: cover; background-position: center; height: 220px;
+        background-size: cover; background-position: center; height: 200px;
         border-radius: 15px; display: flex; flex-direction: column;
         justify-content: flex-end; padding: 15px; color: white;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.3); margin-bottom: 20px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.3); margin-bottom: 15px;
     }}
-    .overlay {{ background: rgba(0, 0, 0, 0.6); padding: 10px; border-radius: 10px; }}
+    .overlay {{ background: rgba(0, 0, 0, 0.6); padding: 8px; border-radius: 8px; font-size: 0.9rem; }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -67,65 +67,79 @@ def cargar_datos():
 df_total = cargar_datos()
 
 if df_total is not None:
-    # Sidebar
+    # Sidebar Global
     st.sidebar.title("🎮 Panel PAIC")
-    prod_sel = st.sidebar.selectbox("Producto:", ['Papa Blanca (quintal)', 'Cebolla Amarilla (Kg)', 'Fresa (Kg)'])
-    mes_proy_txt = st.sidebar.select_slider("Proyección:", options=df_total[df_total['Origen']=='Proyección']['Fecha'].dt.strftime('%b %Y').unique())
+    prod_sel = st.sidebar.selectbox("Producto Principal:", ['Papa Blanca (quintal)', 'Cebolla Amarilla (Kg)', 'Fresa (Kg)'])
+    
+    # Lista de meses para el slider
+    opciones_meses = df_total[df_total['Origen']=='Proyección']['Fecha'].dt.strftime('%b %Y').unique()
+    mes_proy_txt = st.sidebar.select_slider("Mes para Comparar/Proyectar:", options=opciones_meses)
 
     # Banner
     st.markdown(f'<div class="hero-banner">🌱 PAIC - Cartago 2026</div>', unsafe_allow_html=True)
 
     tabs = st.tabs(["🏠 DASHBOARD", "📊 COMPARATIVA", "📉 HISTORIAL", "🔮 PREDICCIÓN", "🌡️ PATRONES", "🧮 CALCULADORA", "🤖 AGRI"])
 
+    # Datos de referencia
     real_f = df_total[df_total['Origen']=='Real'].iloc[-1]
-    proy_f = df_total[df_total['Fecha'] == pd.to_datetime(mes_proy_txt)].iloc[0]
+    # Buscamos la fila exacta de la proyección
+    fecha_busqueda = pd.to_datetime(mes_proy_txt)
+    proy_f = df_total[df_total['Fecha'] == fecha_busqueda].iloc[0]
 
     with tabs[0]:
-        st.subheader("Estado de Cultivos")
+        st.subheader("Precios Actuales")
         c1, c2, c3 = st.columns(3)
         for col, p_name, img in zip([c1, c2, c3], ['Papa Blanca (quintal)', 'Cebolla Amarilla (Kg)', 'Fresa (Kg)'], [fotos['Papa Blanca (quintal)'], fotos['Cebolla Amarilla (Kg)'], fotos['Fresa (Kg)']]):
             col.markdown(f"""<div class="product-card" style="background-image: url('{img}');">
                 <div class="overlay"><b>{p_name.split(' (')[0].upper()}</b><br>₡{real_f[p_name]:,.0f}</div>
             </div>""", unsafe_allow_html=True)
 
+    # --- 📊 COMPARATIVA (REPARADA) ---
+    with tabs[1]:
+        st.subheader(f"Comparativa: Hoy vs {mes_proy_txt}")
+        col_m1, col_m2 = st.columns(2)
+        
+        # Métricas claras
+        val_hoy = real_f[prod_sel]
+        val_fut = proy_f[prod_sel]
+        cambio = ((val_fut / val_hoy) - 1) * 100
+        
+        col_m1.metric("Precio Hoy", f"₡{val_hoy:,.0f}")
+        col_m2.metric(f"Precio {mes_proy_txt}", f"₡{val_fut:,.0f}", f"{cambio:+.1f}%")
+        
+        # Gráfico de barras comparativo
+        fig_bar = px.bar(
+            x=['Hoy', mes_proy_txt], 
+            y=[val_hoy, val_fut],
+            color=['Hoy', 'Proyección'],
+            labels={'x': 'Tiempo', 'y': 'Precio ₡'},
+            text_auto='.2s'
+        )
+        st.plotly_chart(fig_bar, use_container_width=True)
+
     with tabs[2]:
-        st.plotly_chart(px.line(df_total[df_total['Origen']=='Real'], x="Fecha", y=prod_sel, title=f"Historial: {prod_sel}"), use_container_width=True)
+        st.plotly_chart(px.line(df_total[df_total['Origen']=='Real'], x="Fecha", y=prod_sel, markers=True), use_container_width=True)
 
     with tabs[3]:
-        st.plotly_chart(px.line(df_total[df_total['Fecha'] <= pd.to_datetime(mes_proy_txt)], x="Fecha", y=prod_sel, color="Origen", title="Predicción"), use_container_width=True)
+        df_pred = df_total[df_total['Fecha'] <= fecha_busqueda]
+        st.plotly_chart(px.line(df_pred, x="Fecha", y=prod_sel, color="Origen", title=f"Proyección de {prod_sel}"), use_container_width=True)
 
-    # --- 🌡️ PATRONES (REPARADO) ---
     with tabs[4]:
-        st.subheader("Análisis de Estacionalidad")
+        st.subheader("Patrones Estacionales")
         df_h = df_total[df_total['Origen']=='Real'].copy()
         df_h['Mes'] = df_h['Fecha'].dt.month
-        # Agrupamos y quitamos columnas no numéricas explícitamente
-        heat_data = df_h.groupby('Mes')[['Papa Blanca (quintal)', 'Cebolla Amarilla (Kg)', 'Fresa (Kg)']].mean()
-        fig_heat = px.imshow(heat_data.T, color_continuous_scale='RdYlGn', text_auto=True, title="Mapa de Calor: Rojo (Bajo) | Verde (Alto)")
-        st.plotly_chart(fig_heat, use_container_width=True)
-        st.info("💡 Este mapa muestra en qué meses del año el producto suele estar más caro (verde) o más barato (rojo).")
+        heat = df_h.groupby('Mes')[['Papa Blanca (quintal)', 'Cebolla Amarilla (Kg)', 'Fresa (Kg)']].mean()
+        st.plotly_chart(px.imshow(heat.T, color_continuous_scale='RdYlGn', text_auto=True), use_container_width=True)
 
-    # --- 🧮 CALCULADORA (REPARADA) ---
     with tabs[5]:
-        st.subheader("🧮 Calculadora de Rentabilidad Modular")
-        with st.expander("📝 Configuración de Costos", expanded=True):
-            col1, col2 = st.columns(2)
-            ha = col1.number_input("Hectáreas:", value=1.0, step=0.1)
-            insumos = col1.number_input("🌿 Insumos/Semilla (₡):", value=250000)
-            mano_obra = col2.number_input("👷 Mano de Obra (₡):", value=150000)
-            transporte = col2.number_input("🚚 Logística/Flete (₡):", value=50000)
+        st.subheader("Calculadora de Rentabilidad")
+        c_ha, c_ins = st.columns(2)
+        hect = c_ha.number_input("Hectáreas:", 0.1, 10.0, 1.0)
+        insu = c_ins.number_input("Costos de Insumos (₡):", value=300000)
+        p_v_sim = st.slider(f"Precio Venta Simulado {prod_sel}:", 1000, 30000, int(val_hoy))
         
-        precio_v = st.slider(f"Simular Precio Venta {prod_sel} (₡):", 1000, 30000, int(real_f[prod_sel]))
-        
-        costo_t = insumos + mano_obra + transporte
-        # Estimación: 600 unidades (kilos o quintales) por hectárea
-        ingreso_t = ha * 600 * precio_v
-        utilidad = ingreso_t - costo_t
-        
-        st.divider()
-        res1, res2 = st.columns(2)
-        res1.metric("COSTO TOTAL", f"₡{costo_t:,.2f}")
-        res2.metric("UTILIDAD ESTIMADA", f"₡{utilidad:,.2f}", f"{(utilidad/costo_t)*100:.1f}% ROI")
+        utilidad = (hect * 600 * p_v_sim) - insu
+        st.metric("UTILIDAD NETA", f"₡{utilidad:,.2f}", f"{(utilidad/insu)*100:.1f}% ROI")
 
     with tabs[6]:
         msg = st.chat_input("Consulta a Agri...")
@@ -134,4 +148,4 @@ if df_total is not None:
             st.write(res.choices[0].message.content)
 
 else:
-    st.error("Error al cargar datos. Verifique su Excel.")
+    st.error("Error al cargar datos.")
