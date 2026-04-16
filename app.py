@@ -5,84 +5,130 @@ import google.generativeai as genai
 import plotly.express as px
 from datetime import datetime, timedelta
 
-# --- 1. CONFIGURACIÓN DE PÁGINA ---
-st.set_page_config(page_title="PAIC - Cartago 2027", layout="wide", page_icon="🌱")
+# --- 1. CONFIGURACIÓN Y ESTILO ---
+st.set_page_config(page_title="PAIC - Horizonte 2027", layout="wide", page_icon="🌱")
 
-# --- 2. MOTOR DE DATOS (Predicciones Python) ---
+st.markdown("""
+    <style>
+    .stMetric { background-color: #F1F8E9; padding: 15px; border-radius: 12px; border-bottom: 5px solid #5D4037; }
+    .stButton>button { width: 100%; border-radius: 15px; height: 3em; background-color: #2E7D32; color: white; font-weight: bold; }
+    h1, h2, h3 { color: #3E2723; }
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- 2. LLAVE DE SEGURIDAD ---
+LLAVE_PAIC = "AQ.Ab8RN6KbGWiFXRO2zRRDzP6jz2dvgrd3MzPUnjAwPLx5TzfZ1A"
+
+# --- 3. MOTOR DE DATOS Y PREDICCIONES ---
 @st.cache_data
-def motor_datos():
+def cargar_y_predecir():
     try:
+        # Carga del Excel
         df = pd.read_excel("Precios historicos 15 ABRIL.xlsx", engine='openpyxl')
         df['Fecha'] = pd.to_datetime(df['Fecha'])
-        u_f = df['Fecha'].max()
-        futuro = pd.date_range(start=u_f + timedelta(days=1), end="2027-12-31", freq='MS')
-        lista_pred = []
-        for f in futuro:
-            mes_actual = f.month
-            promedio_mes = df[df['Fecha'].dt.month == mes_actual].mean(numeric_only=True)
-            factor = 1 + (len(lista_pred) * 0.0015) 
-            lista_pred.append({
-                'Fecha': f, 'Papa Blanca (quintal)': promedio_mes['Papa Blanca (quintal)'] * factor,
-                'Cebolla Amarilla (Kg)': promedio_mes['Cebolla Amarilla (Kg)'] * factor,
-                'Fresa (Kg)': promedio_mes['Fresa (Kg)'] * factor, 'Origen': 'Predicción Python'
+        
+        # Generar proyección hasta finales de 2027
+        ultima_fecha = df['Fecha'].max()
+        fechas_futuras = pd.date_range(start=ultima_fecha + timedelta(days=1), end="2027-12-31", freq='MS')
+        
+        proyecciones = []
+        for i, fecha in enumerate(fechas_futuras):
+            # Lógica estacional: busca el promedio histórico de ese mes específico
+            mes = fecha.month
+            promedios = df[df['Fecha'].dt.month == mes].mean(numeric_only=True)
+            
+            # Factor de ajuste leve (inflación/crecimiento proyectado)
+            ajuste = 1 + (i * 0.002) 
+            
+            proyecciones.append({
+                'Fecha': fecha,
+                'Papa Blanca (quintal)': promedios['Papa Blanca (quintal)'] * ajuste,
+                'Cebolla Amarilla (Kg)': promedios['Cebolla Amarilla (Kg)'] * ajuste,
+                'Fresa (Kg)': promedios['Fresa (Kg)'] * ajuste,
+                'Origen': 'Proyección IA/Python'
             })
+        
         df['Origen'] = 'Histórico Real'
-        df_completo = pd.concat([df, pd.DataFrame(lista_pred)], ignore_index=True)
-        return df_completo, df[df['Fecha'].dt.month == (u_f.month + 1 if u_f.month < 12 else 1)].mean(numeric_only=True)
-    except: return None, None
+        df_final = pd.concat([df, pd.DataFrame(proyecciones)], ignore_index=True)
+        return df_final
+    except Exception as e:
+        st.error(f"Error al procesar datos: {e}")
+        return None
 
-df_total, calculos_python = motor_datos()
+df_total = cargar_y_predecir()
 
-# --- 3. ESTRUCTURA DE NAVEGACIÓN ---
+# --- 4. INTERFAZ DE USUARIO (PESTAÑAS) ---
+st.title("🌱 Plataforma Agro-Inteligente Cartago")
 t_inicio, t_hist, t_pred, t_calc, t_ia = st.tabs([
-    "🏠 INICIO", "📚 HISTÓRICO", "🔮 PREDICCIÓN 2027", "🧮 CALCULADORA", "🤖 CONSULTOR IA"
+    "🏠 INICIO", "📚 HISTÓRICO", "🔮 PROYECCIONES 2027", "🧮 CALCULADORA", "🤖 CONSULTOR IA"
 ])
 
-# INICIO: MÉTRICAS RÁPIDAS
+# --- PESTAÑA INICIO: SEMÁFORO DE PRECIOS ---
 with t_inicio:
-    st.header("🎯 Resumen de Precios")
+    st.header("🎯 Resumen de Mercado Actual")
     if df_total is not None:
-        real = df_total[df_total['Origen'] == 'Histórico Real'].iloc[-1]
-        prox = df_total[df_total['Origen'] == 'Predicción Python'].iloc[0]
+        actual = df_total[df_total['Origen'] == 'Histórico Real'].iloc[-1]
         c1, c2, c3 = st.columns(3)
-        c1.metric("Papa (Quintal)", f"₡{real['Papa Blanca (quintal)']:,.0f}", f"{((prox['Papa Blanca (quintal)']/real['Papa Blanca (quintal)'])-1)*100:.1f}%")
-        c2.metric("Cebolla (Kg)", f"₡{real['Cebolla Amarilla (Kg)']:,.0f}", f"{((prox['Cebolla Amarilla (Kg)']/real['Cebolla Amarilla (Kg)'])-1)*100:.1f}%")
-        c3.metric("Fresa (Kg)", f"₡{real['Fresa (Kg)']:,.0f}", f"{((prox['Fresa (Kg)']/real['Fresa (Kg)'])-1)*100:.1f}%", delta_color="inverse")
+        c1.metric("Papa (Quintal)", f"₡{actual['Papa Blanca (quintal)']:,.0f}")
+        c2.metric("Cebolla (Kg)", f"₡{actual['Cebolla Amarilla (Kg)']:,.0f}")
+        c3.metric("Fresa (Kg)", f"₡{actual['Fresa (Kg)']:,.0f}")
 
-# CALCULADORA: FINANZAS AGRÍCOLAS
+# --- PESTAÑA HISTÓRICO: GRÁFICOS ---
+with t_hist:
+    st.header("📚 Análisis de Datos Históricos")
+    if df_total is not None:
+        fig_hist = px.line(df_total[df_total['Origen'] == 'Histórico Real'], 
+                          x='Fecha', y=['Papa Blanca (quintal)', 'Cebolla Amarilla (Kg)', 'Fresa (Kg)'],
+                          title="Evolución de Precios en Cartago", color_discrete_sequence=px.colors.qualitative.Pastel)
+        st.plotly_chart(fig_hist, use_container_width=True)
+
+# --- PESTAÑA PROYECCIONES: FUTURO 2027 ---
+with t_pred:
+    st.header("🔮 Horizonte de Precios 2026-2027")
+    if df_total is not None:
+        fig_pred = px.line(df_total, x='Fecha', y='Papa Blanca (quintal)', color='Origen',
+                          title="Proyección de Precio: Papa Blanca")
+        st.plotly_chart(fig_pred, use_container_width=True)
+
+# --- PESTAÑA CALCULADORA: FINANZAS COMPLETAS ---
 with t_calc:
     st.header("🧮 Simulador de Rentabilidad")
     col1, col2 = st.columns(2)
-    hectareas = col1.number_input("Hectáreas:", value=1.0)
-    rend = col2.number_input("Rendimiento (Unid/Ha):", value=500)
-    p_venta = col1.number_input("Precio Venta (₡):", value=20000)
-    merma = col2.slider("% Merma (Pérdida):", 0, 50, 5)
+    with col1:
+        hectareas = st.number_input("Hectáreas a sembrar:", value=1.0)
+        costo_insumos = st.number_input("Insumos (Semilla, Abono) ₡:", value=350000)
+        jornales = st.number_input("Costo Total de Jornales ₡:", value=250000)
+    with col2:
+        rendimiento = st.number_input("Rendimiento (Unidades por Ha):", value=600)
+        precio_v = st.number_input("Precio de Venta Sugerido ₡:", value=18000)
+        merma = st.slider("% Merma o Desperdicio:", 0, 40, 5)
     
-    insumos = col1.number_input("Insumos ₡:", value=300000)
-    jornales = col2.number_input("Costo de Jornales ₡:", value=300000)
+    # Cálculos
+    produccion_neta = (hectareas * rendimiento) * (1 - merma/100)
+    ingreso_total = produccion_neta * precio_v
+    egreso_total = costo_insumos + jornales
+    utilidad = ingreso_total - egreso_total
     
-    utilidad = ((hectareas * rend * (1 - merma/100)) * p_venta) - (insumos + jornales)
     st.markdown("---")
-    st.metric("UTILIDAD NETA ESTIMADA", f"₡{utilidad:,.2f}")
+    st.metric("UTILIDAD NETA ESTIMADA", f"₡{utilidad:,.2f}", delta=f"{((utilidad/egreso_total)*100):.1f}% ROI")
 
-# CONSULTOR IA: CONEXIÓN GOOGLE
+# --- PESTAÑA IA: EL CONSULTOR ---
 with t_ia:
-    st.header("🤖 Consultor Inteligente PAIC")
-    # TU LLAVE COPIADA
-    LLAVE_FINAL = "AQ.Ab8RN6KbGWiFXRO2zRRDzP6jz2dvgrd3MzPUnjAwPLx5TzfZ1A"
-    
-    pregunta = st.text_area("Haga una pregunta sobre los datos o su cultivo:")
+    st.header("🤖 Consultor Técnico IA")
+    pregunta = st.text_area("Haga una consulta sobre su cultivo o los precios:")
     
     if st.button("ANALIZAR ESCENARIO"):
         if pregunta:
             try:
-                genai.configure(api_key=LLAVE_FINAL)
-                model = genai.GenerativeModel('gemini-1.5-flash')
-                contexto = f"Datos promedio: {calculos_python}. Utilidad actual: {utilidad}. Pregunta: {pregunta}"
+                genai.configure(api_key=LLAVE_PAIC)
+                model = genai.GenerativeModel('gemini-pro')
                 
-                with st.spinner('Consultando con la IA...'):
+                # Le damos contexto a la IA para que sea más inteligente
+                contexto = f"Contexto: Agricultor en Cartago. Utilidad calculada: {utilidad}. Pregunta: {pregunta}"
+                
+                with st.spinner('Procesando análisis técnico...'):
                     response = model.generate_content(contexto)
-                    st.success("Análisis de la IA:")
+                    st.success("Análisis PAIC:")
                     st.info(response.text)
             except Exception as e:
-                st.error(f"Error de conexión: {e}")
+                st.error(f"Error de conexión con la IA: {e}")
