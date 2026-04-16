@@ -7,12 +7,23 @@ from datetime import datetime, timedelta
 # --- 1. CONFIGURACIÓN ---
 st.set_page_config(page_title="PAIC - Cartago 2026", layout="wide", page_icon="🌱")
 
-# CARGAR LLAVE DESDE LOS SECRETOS (NO TOCAR ESTA LÍNEA)
+# 🔒 SEGURIDAD: Carga la llave desde los Secretos de Streamlit Cloud
 try:
-    GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
-    genai.configure(api_key=GOOGLE_API_KEY)
-except Exception:
-    st.warning("⚠️ Configuración de seguridad pendiente: Inserte su GOOGLE_API_KEY en los Secretos de Streamlit Cloud.")
+    if "GOOGLE_API_KEY" in st.secrets:
+        genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
+    else:
+        st.warning("⚠️ Configuración pendiente: Inserte GOOGLE_API_KEY en Secrets de Streamlit.")
+except Exception as e:
+    st.error(f"Error de configuración: {e}")
+
+# --- Estilos Visuales ---
+st.markdown("""
+    <style>
+    .rentable { color: #2E7D32; background-color: #E8F5E9; padding: 15px; border-radius: 10px; border: 2px solid #2E7D32; text-align: center; }
+    .ajustado { color: #FBC02D; background-color: #FFFDE7; padding: 15px; border-radius: 10px; text-align: center; border: 2px solid #FBC02D; }
+    .perdida { color: #D32F2F; background-color: #FFEBEE; padding: 15px; border-radius: 10px; border: 2px solid #D32F2F; text-align: center; }
+    </style>
+    """, unsafe_allow_html=True)
 
 # --- 2. MOTOR DE DATOS ---
 @st.cache_data
@@ -30,9 +41,11 @@ def motor_datos():
             mes = f.month
             prom = df[df['Fecha'].dt.month == mes].mean(numeric_only=True)
             proy.append({
-                'Fecha': f, 'Papa Blanca (quintal)': prom['Papa Blanca (quintal)'] * (1 + i*0.002),
-                'Cebolla Amarilla (Kg)': prom['Cebolla Amarilla (Kg)'] * (1 + i*0.002),
-                'Fresa (Kg)': prom['Fresa (Kg)'] * (1 + i*0.002), 'Origen': 'Proyección PAIC'
+                'Fecha': f, 
+                'Papa Blanca (quintal)': prom['Papa Blanca (quintal)'] * (1 + i * 0.002),
+                'Cebolla Amarilla (Kg)': prom['Cebolla Amarilla (Kg)'] * (1 + i * 0.002),
+                'Fresa (Kg)': prom['Fresa (Kg)'] * (1 + i * 0.002), 
+                'Origen': 'Proyección PAIC'
             })
         df['Origen'] = 'Histórico Real'
         return pd.concat([df, pd.DataFrame(proy)], ignore_index=True)
@@ -52,31 +65,47 @@ else:
         real = df_total[df_total['Origen'] == 'Histórico Real'].iloc[-1]
         prox = df_total[df_total['Origen'] == 'Proyección PAIC'].iloc[0]
         c1, c2, c3 = st.columns(3)
-        for p, col in zip(['Papa Blanca (quintal)', 'Cebolla Amarilla (Kg)', 'Fresa (Kg)'], [c1, c2, c3]):
+        prods = ['Papa Blanca (quintal)', 'Cebolla Amarilla (Kg)', 'Fresa (Kg)']
+        for p, col in zip(prods, [c1, c2, c3]):
             v = ((prox[p]/real[p])-1)*100
             col.metric(p, f"₡{real[p]:,.0f}", f"Próx: {prox[p]:,.0f} ({v:+.1f}%)")
 
     with t4:
         st.header("🧮 Calculadora de Rentabilidad")
-        ha = st.number_input("Hectáreas:", value=1.0)
-        p_v = st.number_input("Precio Venta ₡:", value=int(real['Papa Blanca (quintal)']))
-        costos = st.number_input("Costos Totales ₡:", value=500000)
+        with st.expander("Configuración del Cultivo", expanded=True):
+            ha = st.number_input("Hectáreas:", value=1.0)
+            p_v = st.number_input("Precio Venta ₡:", value=int(real['Papa Blanca (quintal)']))
+            costos = st.number_input("Costos Totales ₡:", value=500000)
+        
         utilidad = (ha * 600 * p_v) - costos
         st.metric("GANANCIA NETA", f"₡{utilidad:,.2f}")
         
-        # Semáforo dinámico
-        if utilidad > 200000: st.success("🟢 RENTABLE")
-        elif utilidad > 0: st.warning("🟡 AJUSTADO")
-        else: st.error("🔴 PÉRDIDA")
+        if utilidad > 200000: st.markdown("<div class='rentable'><h3>🟢 RENTABLE</h3></div>", unsafe_allow_html=True)
+        elif utilidad > 0: st.markdown("<div class='ajustado'><h3>🟡 AJUSTADO</h3></div>", unsafe_allow_html=True)
+        else: st.markdown("<div class='perdida'><h3>🔴 PÉRDIDA</h3></div>", unsafe_allow_html=True)
 
     with t5:
         st.header("🤖 Consultor IA PAIC")
-        pregunta = st.text_area("Pregunta técnica:")
-        if st.button("ANALIZAR"):
+        pregunta = st.text_area("Pregunta técnica para la IA:")
+        
+        if st.button("ANALIZAR ESCENARIO"):
             if pregunta and "GOOGLE_API_KEY" in st.secrets:
-                model = genai.GenerativeModel('gemini-1.5-flash')
-                ctx = f"Eres experto agrónomo de Cartago. Utilidad: ₡{utilidad}. Pregunta: {pregunta}"
-                res = model.generate_content(ctx)
-                st.info(res.text)
+                try:
+                    # CORRECCIÓN NotFound: Usar la ruta completa del modelo
+                    model = genai.GenerativeModel('models/gemini-1.5-flash')
+                    ctx = f"Eres experto agrónomo de Cartago. Utilidad calculada: ₡{utilidad}. Pregunta: {pregunta}"
+                    
+                    with st.spinner('Consultando a Gemini...'):
+                        res = model.generate_content(ctx)
+                        st.info(res.text)
+                except Exception as e:
+                    st.error(f"Falla en el modelo principal: {e}")
+                    st.info("Intentando conectar con modelo de respaldo...")
+                    try:
+                        model_alt = genai.GenerativeModel('models/gemini-1.0-pro')
+                        res_alt = model_alt.generate_content(ctx)
+                        st.info(res_alt.text)
+                    except:
+                        st.error("No se pudo conectar con los servicios de Google. Verifique su API Key.")
             else:
-                st.warning("Escriba su pregunta o verifique la llave API.")
+                st.warning("Escriba su pregunta o configure la clave API en los Secrets.")
