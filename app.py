@@ -5,34 +5,17 @@ import google.generativeai as genai
 import plotly.express as px
 from datetime import datetime, timedelta
 
-# --- 1. CONFIGURACIÓN DE INTERFAZ Y ESTILO ---
-st.set_page_config(page_title="PAIC - Horizonte 2027", layout="wide", page_icon="🌱")
+# --- 1. CONFIGURACIÓN DE PÁGINA ---
+st.set_page_config(page_title="PAIC - Cartago 2027", layout="wide", page_icon="🌱")
 
-st.markdown("""
-    <style>
-    .main { background-color: #FFFFFF; }
-    .stButton>button { 
-        width: 100%; border-radius: 15px; height: 3.5em; 
-        background-color: #2E7D32; color: white; 
-        font-size: 20px; font-weight: bold; border: 2px solid #1B5E20;
-    }
-    .stMetric { 
-        background-color: #F1F8E9; padding: 15px; 
-        border-radius: 12px; border-bottom: 5px solid #5D4037; 
-    }
-    h1, h2, h3 { color: #3E2723; }
-    </style>
-    """, unsafe_allow_html=True)
-
-# --- 2. MOTOR DE DATOS (ESTADÍSTICA PYTHON) ---
+# --- 2. MOTOR DE DATOS (Predicciones Python) ---
 @st.cache_data
 def motor_datos():
     try:
         df = pd.read_excel("Precios historicos 15 ABRIL.xlsx", engine='openpyxl')
         df['Fecha'] = pd.to_datetime(df['Fecha'])
-        ultima_f = df['Fecha'].max()
-        futuro = pd.date_range(start=ultima_f + timedelta(days=1), end="2027-12-31", freq='MS')
-        
+        u_f = df['Fecha'].max()
+        futuro = pd.date_range(start=u_f + timedelta(days=1), end="2027-12-31", freq='MS')
         lista_pred = []
         for f in futuro:
             mes_actual = f.month
@@ -45,89 +28,61 @@ def motor_datos():
             })
         df['Origen'] = 'Histórico Real'
         df_completo = pd.concat([df, pd.DataFrame(lista_pred)], ignore_index=True)
-        return df_completo, df[df['Fecha'].dt.month == (ultima_f.month + 1 if ultima_f.month < 12 else 1)].mean(numeric_only=True)
-    except Exception as e:
-        st.error(f"Error cargando Excel: {e}")
-        return None, None
+        return df_completo, df[df['Fecha'].dt.month == (u_f.month + 1 if u_f.month < 12 else 1)].mean(numeric_only=True)
+    except: return None, None
 
 df_total, calculos_python = motor_datos()
 
-# --- 3. ESTRUCTURA DE PESTAÑAS ---
+# --- 3. ESTRUCTURA DE NAVEGACIÓN ---
 t_inicio, t_hist, t_pred, t_calc, t_ia = st.tabs([
-    "🏠 INICIO", "📚 HISTÓRICO", "🔮 PREDICCIÓN 2027", "🧮 SUPER CALCULADORA", "🤖 CONSULTOR IA"
+    "🏠 INICIO", "📚 HISTÓRICO", "🔮 PREDICCIÓN 2027", "🧮 CALCULADORA", "🤖 CONSULTOR IA"
 ])
 
-# --- PESTAÑA 1: INICIO (Comparativa corregida) ---
+# INICIO: MÉTRICAS RÁPIDAS
 with t_inicio:
-    st.header("🎯 Panel de Decisión Rápida")
+    st.header("🎯 Resumen de Precios")
     if df_total is not None:
         real = df_total[df_total['Origen'] == 'Histórico Real'].iloc[-1]
         prox = df_total[df_total['Origen'] == 'Predicción Python'].iloc[0]
-        
         c1, c2, c3 = st.columns(3)
         c1.metric("Papa (Quintal)", f"₡{real['Papa Blanca (quintal)']:,.0f}", f"{((prox['Papa Blanca (quintal)']/real['Papa Blanca (quintal)'])-1)*100:.1f}%")
         c2.metric("Cebolla (Kg)", f"₡{real['Cebolla Amarilla (Kg)']:,.0f}", f"{((prox['Cebolla Amarilla (Kg)']/real['Cebolla Amarilla (Kg)'])-1)*100:.1f}%")
         c3.metric("Fresa (Kg)", f"₡{real['Fresa (Kg)']:,.0f}", f"{((prox['Fresa (Kg)']/real['Fresa (Kg)'])-1)*100:.1f}%", delta_color="inverse")
 
-# --- PESTAÑAS 2 Y 3: GRÁFICOS INTERACTIVOS ---
-def graficar(df_sub, k):
-    st.write("💡 *Use los botones para filtrar o toque la leyenda para ocultar líneas.*")
-    prod = st.radio("Producto:", ["Todos", "Papa", "Cebolla", "Fresa"], horizontal=True, key=k)
-    cols = ["Papa Blanca (quintal)", "Cebolla Amarilla (Kg)", "Fresa (Kg)"]
-    if prod != "Todos": cols = [c for c in cols if prod in c]
-    fig = px.line(df_sub, x='Fecha', y=cols, color_discrete_map={"Papa Blanca (quintal)": "#D4A373", "Cebolla Amarilla (Kg)": "#FFB703", "Fresa (Kg)": "#E63946"})
-    fig.update_traces(line=dict(width=4))
-    st.plotly_chart(fig, use_container_width=True)
-
-with t_hist: st.header("📚 Registro Histórico"); graficar(df_total[df_total['Origen'] == 'Histórico Real'], "h_b")
-with t_pred: st.header("🔮 Predicción Estacional a 2027"); graficar(df_total, "p_b")
-
-# --- PESTAÑA 4: SUPER CALCULADORA ---
+# CALCULADORA: FINANZAS AGRÍCOLAS
 with t_calc:
-    st.header("🧮 Simulador de Rentabilidad Agrícola")
-    with st.expander("🌱 1. CULTIVO Y PRODUCCIÓN", expanded=True):
-        col1, col2, col3_c = st.columns(3)
-        crop = col1.selectbox("Producto:", ["Papa", "Cebolla", "Fresa"])
-        hectareas = col2.number_input("Hectáreas:", value=1.0)
-        rend = col3_c.number_input("Rendimiento (Unid/Ha):", value=500)
-        p_venta = col1.number_input("Precio Venta (₡):", value=20000 if crop=="Papa" else 800)
-        merma = col2.slider("% Pérdida Estimada (Clima/Plagas):", 0, 50, 5)
-
-    with st.expander("🌿 2. COSTOS DE PRODUCCIÓN"):
-        ca, cb = st.columns(2)
-        insumos = ca.number_input("Insumos (Semillas, Fertilizantes) ₡:", value=300000)
-        jornales = ca.number_input("Cantidad de Jornales:", value=20)
-        pago_j = ca.number_input("Pago por Jornal ₡:", value=15000)
-        maquina = cb.number_input("Maquinaria y Tractor ₡:", value=100000)
-        otros_c = cb.number_input("Otros (Agua, Alquiler) ₡:", value=120000)
-
-    p_neta = (hectareas * rend) * (1 - merma/100)
-    ingreso = p_neta * p_venta
-    costo = insumos + (jornales * pago_j) + maquina + otros_c
-    utilidad = ingreso - costo
+    st.header("🧮 Simulador de Rentabilidad")
+    col1, col2 = st.columns(2)
+    hectareas = col1.number_input("Hectáreas:", value=1.0)
+    rend = col2.number_input("Rendimiento (Unid/Ha):", value=500)
+    p_venta = col1.number_input("Precio Venta (₡):", value=20000)
+    merma = col2.slider("% Merma (Pérdida):", 0, 50, 5)
     
-    st.markdown(f"### 📊 Resultado: {'🟢 RENTABLE' if utilidad > 0 else '🔴 PÉRDIDA'}")
-    r1, r2 = st.columns(2)
-    r1.metric("Utilidad Neta", f"₡{utilidad:,.2f}")
-    r2.metric("Margen Ganancia", f"{(utilidad/ingreso*100):.1f}%" if ingreso > 0 else "0%")
+    insumos = col1.number_input("Insumos ₡:", value=300000)
+    jornales = col2.number_input("Costo de Jornales ₡:", value=300000)
+    
+    utilidad = ((hectareas * rend * (1 - merma/100)) * p_venta) - (insumos + jornales)
+    st.markdown("---")
+    st.metric("UTILIDAD NETA ESTIMADA", f"₡{utilidad:,.2f}")
 
-# --- PESTAÑA 5: CONSULTOR IA (CON LA NUEVA CLAVE) ---
+# CONSULTOR IA: CONEXIÓN GOOGLE
 with t_ia:
-    st.header("🤖 Consultor IA PAIC")
-    # CLAVE ACTUALIZADA PROPORCIONADA POR EL USUARIO
-    USER_KEY = "AQ.Ab8RN6InVX9yR8e5a0S7EaD53jOp2YyJpjASapaPk2fsziRvRA" 
+    st.header("🤖 Consultor Inteligente PAIC")
+    # TU LLAVE COPIADA
+    LLAVE_FINAL = "AQ.Ab8RN6KbGWiFXRO2zRRDzP6jz2dvgrd3MzPUnjAwPLx5TzfZ1A"
     
-    query = st.text_area("Haga su consulta técnica al sistema:", height=150)
+    pregunta = st.text_area("Haga una pregunta sobre los datos o su cultivo:")
     
-    if st.button("EJECUTAR ANÁLISIS"):
-        if query:
+    if st.button("ANALIZAR ESCENARIO"):
+        if pregunta:
             try:
-                genai.configure(api_key=USER_KEY.strip())
+                genai.configure(api_key=LLAVE_FINAL)
                 model = genai.GenerativeModel('gemini-1.5-flash')
-                ctx = f"Datos: {calculos_python}. Escenario: Utilidad ₡{utilidad}. Pregunta: {query}"
-                with st.spinner('Analizando datos de Cartago...'):
-                    response = model.generate_content(ctx)
-                    st.success("Análisis completo:")
+                contexto = f"Datos promedio: {calculos_python}. Utilidad actual: {utilidad}. Pregunta: {pregunta}"
+                
+                with st.spinner('Consultando con la IA...'):
+                    response = model.generate_content(contexto)
+                    st.success("Análisis de la IA:")
                     st.info(response.text)
             except Exception as e:
                 st.error(f"Error de conexión: {e}")
