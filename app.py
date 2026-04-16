@@ -79,7 +79,7 @@ with t_inicio:
         st.metric("Estimado Próx. Mes", f"₡{mes_prox['Cebolla Amarilla (Kg)']:,.0f}", 
                   f"{((mes_prox['Cebolla Amarilla (Kg)']/mes_real['Cebolla Amarilla (Kg)'])-1)*100:.1f}%")
 
-    with col3:
+    with c3:
         st.subheader("🍓 Fresa (Kg)")
         st.metric("Precio Actual", f"₡{mes_real['Fresa (Kg)']:,.0f}")
         st.metric("Estimado Próx. Mes", f"₡{mes_prox['Fresa (Kg)']:,.0f}", 
@@ -100,7 +100,7 @@ def plot_interactivo(df_sub, k):
 with t_hist: st.header("📚 Registro Histórico (2020-2026)"); plot_interactivo(df_total[df_total['Origen'] == 'Histórico Real'], "h_btn")
 with t_pred: st.header("🔮 Estimación de Precios a Diciembre 2027"); plot_interactivo(df_total, "p_btn")
 
-# --- PESTAÑA 4: SUPER CALCULADORA (El diseño detallado que pediste) ---
+# --- PESTAÑA 4: SUPER CALCULADORA (Diseño detallado) ---
 with t_calc:
     st.header("🧮 Simulador de Rentabilidad Agrícola")
     with st.expander("🌱 CULTIVO Y COMERCIALIZACIÓN", expanded=True):
@@ -132,10 +132,9 @@ with t_calc:
     r2.metric("Margen de Ganancia", f"{margen:.1f}%")
     r3.metric("Costo por Unidad", f"₡{(costos/prod_neta if prod_neta>0 else 0):,.2f}")
 
-# --- PESTAÑA 5: CONSULTOR IA (Con tu API Key Integrada) ---
+# --- PESTAÑA 5: CONSULTOR IA ---
 with t_ia:
     st.header("🤖 Consultor IA PAIC")
-    # TU API KEY INTEGRADA
     USER_API_KEY = "AIzaSyB2Fxb83L448m8-b8DAJw6Da_Js5t_sbCY"
     
     query = st.text_area("Haga su consulta técnica al Asistente:", height=150)
