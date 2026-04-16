@@ -12,7 +12,7 @@ model = None
 try:
     if "GOOGLE_API_KEY" in st.secrets:
         genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-        model = genai.GenerativeModel("gemini-1.0-pro")  # modelo estable
+        model = genai.GenerativeModel("gemini-1.5-flash")  # ✅ modelo correcto
     else:
         st.warning("⚠️ Falta configurar GOOGLE_API_KEY en Secrets")
 except Exception as e:
@@ -90,24 +90,24 @@ with t4:
         else:
             try:
                 prompt = f"""
-                Eres un asesor agrícola en Cartago, Costa Rica.
+Eres un asesor agrícola en Cartago, Costa Rica.
 
-                Datos:
-                - Ganancia actual: ₡{utilidad:,.0f}
+Datos:
+- Ganancia actual: ₡{utilidad:,.0f}
 
-                Da recomendaciones claras y prácticas.
+Da recomendaciones claras, prácticas y accionables.
 
-                Pregunta:
-                {pregunta}
-                """
+Pregunta:
+{pregunta}
+"""
 
                 with st.spinner("Analizando..."):
                     response = model.generate_content(prompt)
 
-                    if hasattr(response, "text"):
+                    if response and hasattr(response, "text") and response.text:
                         st.success(response.text)
                     else:
-                        st.warning("Sin respuesta")
+                        st.warning("La IA no devolvió respuesta válida")
 
             except Exception as e:
                 st.error(f"Error IA: {e}")
