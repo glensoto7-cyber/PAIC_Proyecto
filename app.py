@@ -49,18 +49,18 @@ df_total, hoy, calculos_python = motor_datos()
 # --- 3. PESTAÑAS ---
 t_inicio, t_hist, t_pred, t_calc, t_ia = st.tabs(["🏠 INICIO", "📚 HISTÓRICO", "🔮 PREDICCIÓN 2027", "🧮 SUPER CALCULADORA", "🤖 CONSULTOR IA"])
 
-# INICIO
+# --- INICIO (Comparativa corregida) ---
 with t_inicio:
     st.header("🎯 Panel de Decisión Rápida")
     if df_total is not None:
         real = df_total[df_total['Origen'] == 'Histórico Real'].iloc[-1]
         prox = df_total[df_total['Origen'] == 'Predicción Python'].iloc[0]
-        c1, c2, c3 = st.columns(3)
+        c1, c2, c3 = st.columns(3) # Definimos c1, c2, c3
         c1.metric("Papa (Quintal)", f"₡{real['Papa Blanca (quintal)']:,.0f}", f"{((prox['Papa Blanca (quintal)']/real['Papa Blanca (quintal)'])-1)*100:.1f}%")
         c2.metric("Cebolla (Kg)", f"₡{real['Cebolla Amarilla (Kg)']:,.0f}", f"{((prox['Cebolla Amarilla (Kg)']/real['Cebolla Amarilla (Kg)'])-1)*100:.1f}%")
         c3.metric("Fresa (Kg)", f"₡{real['Fresa (Kg)']:,.0f}", f"{((prox['Fresa (Kg)']/real['Fresa (Kg)'])-1)*100:.1f}%", delta_color="inverse")
 
-# GRÁFICOS INTERACTIVOS (Histórico y Predicción)
+# --- GRÁFICOS ---
 def graficar(df_sub, k):
     prod = st.radio("Filtrar por:", ["Todos", "Papa", "Cebolla", "Fresa"], horizontal=True, key=k)
     cols = ["Papa Blanca (quintal)", "Cebolla Amarilla (Kg)", "Fresa (Kg)"]
@@ -72,24 +72,24 @@ def graficar(df_sub, k):
 with t_hist: st.header("📚 Registro Histórico"); graficar(df_total[df_total['Origen'] == 'Histórico Real'], "h_b")
 with t_pred: st.header("🔮 Predicción a Diciembre 2027"); graficar(df_total, "p_b")
 
-# SUPER CALCULADORA (Aquí está todo lo que pidió Glen)
+# --- SUPER CALCULADORA (Completa) ---
 with t_calc:
     st.header("🧮 Simulador Financiero Completo")
     with st.expander("🌱 1. CULTIVO Y PRODUCCIÓN", expanded=True):
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3_calc = st.columns(3)
         crop = col1.selectbox("Producto:", ["Papa", "Cebolla", "Fresa"])
         hectareas = col2.number_input("Hectáreas:", value=1.0)
-        rend = col3.number_input("Rendimiento (Unid/Ha):", value=500)
+        rend = col3_calc.number_input("Rendimiento (Unid/Ha):", value=500)
         p_venta = col1.number_input("Precio Venta (₡):", value=20000 if crop=="Papa" else 800)
         merma = col2.slider("% Pérdida Estimada:", 0, 50, 5)
 
     with st.expander("🌿 2. COSTOS DE PRODUCCIÓN"):
         ca, cb = st.columns(2)
-        insumos = ca.number_input("Insumos (Semilla, Abono, Químicos) ₡:", value=300000)
+        insumos = ca.number_input("Insumos (Semilla, Abono) ₡:", value=300000)
         jornales = ca.number_input("Cantidad de Jornales:", value=20)
-        pago_j = ca.number_input("Salario por Jornada ₡:", value=15000)
-        maquina = cb.number_input("Maquinaria y Combustible ₡:", value=100000)
-        otros_c = cb.number_input("Otros Gastos ₡:", value=120000)
+        pago_j = ca.number_input("Pago por Jornal ₡:", value=15000)
+        maquina = cb.number_input("Maquinaria ₡:", value=100000)
+        otros_c = cb.number_input("Riego y Otros ₡:", value=120000)
 
     p_neta = (hectareas * rend) * (1 - merma/100)
     ingreso = p_neta * p_venta
@@ -101,28 +101,28 @@ with t_calc:
     r1.metric("Utilidad Neta", f"₡{utilidad:,.2f}")
     r2.metric("Margen", f"{(utilidad/ingreso*100):.1f}%" if ingreso > 0 else "0%")
 
-# IA: SOLUCIÓN FINAL AL ERROR 404
+# --- IA: SOLUCIÓN FINAL AL ERROR 404 ---
 with t_ia:
     st.header("🤖 Consultor IA PAIC")
     USER_KEY = "AIzaSyB2Fxb83L448m8-b8DAJw6Da_Js5t_sbCY"
-    query = st.text_area("Consulta técnica:")
+    query = st.text_area("Haga su consulta técnica:")
     
     if st.button("EJECUTAR ANÁLISIS"):
         if query:
             try:
                 genai.configure(api_key=USER_KEY.strip())
-                # RUTA TÉCNICA FORZADA PARA EVITAR EL 404
-                model = genai.GenerativeModel(model_name='models/gemini-1.5-flash')
-                
-                prompt = f"Actúa como experto agrícola en Cartago. Datos: {calculos_python.to_string()}. Escenario Calculadora: Utilidad ₡{utilidad}. Responde: {query}"
-                with st.spinner('Motor de IA calculando...'):
-                    response = model.generate_content(prompt)
-                    st.info(response.text)
+                # Intentamos con la lista de nombres posibles para asegurar conexión
+                success = False
+                for m_name in ['gemini-1.5-flash', 'gemini-pro', 'models/gemini-pro']:
+                    try:
+                        model = genai.GenerativeModel(m_name)
+                        ctx = f"Datos: {calculos_python.to_string()}. Pregunta: {query}"
+                        response = model.generate_content(ctx)
+                        st.info(response.text)
+                        success = True
+                        break
+                    except: continue
+                if not success:
+                    st.error("No se pudo conectar con los modelos de Google. Intente refrescar la app.")
             except Exception as e:
-                # Si falla Flash, intentamos con Pro
-                try:
-                    model = genai.GenerativeModel(model_name='models/gemini-pro')
-                    response = model.generate_content(prompt)
-                    st.info(response.text)
-                except:
-                    st.error("Error de conexión. Verifique su API Key en Google AI Studio.")
+                st.error(f"Error de conexión: {e}")
