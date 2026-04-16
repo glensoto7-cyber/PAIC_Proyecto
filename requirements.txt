@@ -1,5 +1,6 @@
-streamlit==1.32.2
-pandas==2.0.3
-plotly==5.20.0
-openpyxl==3.1.2
-google-generativeai==0.5.4
+streamlit
+pandas
+groq
+openpyxl
+plotly
+numpy
